@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UNIT VERIFICATION PROTOCOL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+:root {
+  --green: #00ff41;
+  --dgreen: #003b00;
+  --mgreen: #006600;
+  --red: #ff2200;
+  --cyan: #00ffff;
+  --yellow: #ffff00;
+  --bg: #040804;
+  --panel: rgba(0,12,0,0.85);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--green); font-family:'Share Tech Mono','Courier New',monospace; }
+
+/* ── CRT effects ─────────────────────────────── */
+#crt { position:fixed; inset:0; pointer-events:none; z-index:2000;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.13) 3px,rgba(0,0,0,.13) 4px); }
+#vignette { position:fixed; inset:0; pointer-events:none; z-index:1999;
+  background:radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,.85) 100%); }
+#noise { position:fixed; inset:0; pointer-events:none; z-index:1998; opacity:.04;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+/* ── Flash overlays ───────────────────────────── */
+#anomaly-flash { position:fixed; inset:0; pointer-events:none; z-index:900; display:none;
+  background:rgba(255,0,0,.4); animation:redpulse .15s infinite; }
+@keyframes redpulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+#anomaly-text { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  font-family:'VT323',monospace; font-size:72px; color:#ff0000;
+  text-shadow:0 0 40px red,0 0 80px red; z-index:901; display:none;
+  letter-spacing:6px; pointer-events:none; }
+#alarm-overlay { position:fixed; inset:0; pointer-events:none; z-index:850; display:none;
+  background:rgba(200,50,0,.07); animation:alarmpulse .5s infinite; }
+@keyframes alarmpulse { 0%,100%{opacity:1}50%{opacity:0} }
+
+/* ── Screens ──────────────────────────────────── */
+#title-screen { position:fixed; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; z-index:100; background:var(--bg); }
+#round-intro { position:fixed; inset:0; display:none; flex-direction:column;
+  align-items:center; justify-content:center; z-index:800; background:#000; }
+#game-screen { position:fixed; inset:0; display:none; }
+#ending-screen { position:fixed; inset:0; display:none; flex-direction:column;
+  align-items:center; justify-content:center; z-index:999; background:#000; }
+
+/* ── Title ────────────────────────────────────── */
+.title-logo { font-family:'VT323',monospace; font-size:76px; color:var(--green);
+  text-shadow:0 0 20px var(--green),0 0 50px var(--green); letter-spacing:10px;
+  animation:flicker 5s infinite; line-height:1; }
+.title-sub { font-size:13px; color:var(--mgreen); letter-spacing:5px; margin-top:12px; }
+.title-line { font-size:11px; color:#003300; letter-spacing:3px; margin-top:6px; }
+.title-press { font-size:18px; letter-spacing:4px; margin-top:60px; animation:blink 1s infinite; color:var(--green); }
+.title-scan { font-size:11px; color:#004400; letter-spacing:2px; margin-top:16px; }
+@keyframes flicker { 0%,94%,100%{opacity:1}95%{opacity:.7}96%{opacity:1}98%{opacity:.5}99%{opacity:1} }
+@keyframes blink { 0%,49%{opacity:1}50%,100%{opacity:0} }
+
+/* ── Round intro ──────────────────────────────── */
+.ri-label { font-size:14px; letter-spacing:8px; color:var(--mgreen); }
+.ri-num { font-family:'VT323',monospace; font-size:130px; color:var(--red);
+  text-shadow:0 0 40px red; line-height:1; }
+.ri-name { font-size:16px; letter-spacing:6px; color:var(--cyan); margin-top:-10px; }
+.ri-warn { font-size:12px; color:#440000; letter-spacing:3px; margin-top:30px; }
+
+/* ── Game layout ──────────────────────────────── */
+#header { position:absolute; top:0; left:0; right:0; height:48px; display:flex;
+  align-items:center; justify-content:space-between; padding:0 24px;
+  border-bottom:1px solid #0a1a0a; background:rgba(0,8,0,.9); font-size:13px; letter-spacing:2px; }
+#header-title { font-size:15px; letter-spacing:5px; color:var(--green);
+  text-shadow:0 0 8px var(--green); }
+.h-dim { color:#005500; }
+
+#avatar-panel { position:absolute; left:20px; top:58px; bottom:20px; width:190px;
+  border:1px solid #0d200d; background:var(--panel); display:flex;
+  flex-direction:column; align-items:center; padding:16px 10px; }
+#avatar-label { font-size:10px; letter-spacing:3px; color:#003300; margin-bottom:14px; }
+#avatar-wrap { position:relative; }
+#avatar-canvas { image-rendering:pixelated; image-rendering:crisp-edges;
+  width:128px; height:192px; display:block; }
+#speech-bubble { position:absolute; top:-10px; left:155px; background:#ffe; color:#000;
+  border:2px solid #222; padding:6px 10px; border-radius:8px; font-family:'VT323',monospace;
+  font-size:17px; max-width:140px; display:none; z-index:60; line-height:1.2; white-space:normal; }
+#speech-bubble::before { content:''; position:absolute; left:-12px; top:12px;
+  border:6px solid transparent; border-right-color:#222; }
+
+#suit-bar { width:160px; height:8px; background:#010d01; border:1px solid #0d200d; margin-top:16px; overflow:hidden; }
+#suit-fill { height:100%; background:var(--green); transition:width .6s,background .6s; width:100%; }
+.av-info { font-size:10px; color:#003300; margin-top:6px; letter-spacing:1px; line-height:1.8; width:100%; }
+.av-info span { float:right; }
+#unit-status { color:var(--green); }
+
+#mg-panel { position:absolute; left:230px; right:20px; top:58px; bottom:20px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:30px; }
+#mg-container { width:100%; display:flex; flex-direction:column; align-items:center; }
+
+/* ── Inspector ────────────────────────────────── */
+#inspector { position:fixed; right:-220px; top:50%; transform:translateY(-50%);
+  transition:right 1.2s cubic-bezier(.23,1,.32,1); z-index:400; }
+#insp-canvas { image-rendering:pixelated; image-rendering:crisp-edges;
+  width:128px; height:192px; display:block; }
+#scan-line { position:absolute; left:0; right:0; height:4px;
+  background:rgba(0,255,65,.7); box-shadow:0 0 12px var(--green);
+  display:none; animation:sweep 1.8s linear infinite; }
+@keyframes sweep { 0%{top:0} 100%{top:100%} }
+#insp-label { text-align:center; font-size:11px; color:#ff0000; letter-spacing:3px;
+  margin-top:8px; display:none; animation:blink .6s infinite; }
+
+/* ── Mini-game styles ─────────────────────────── */
+.mg-title { font-family:'VT323',monospace; font-size:22px; color:var(--cyan);
+  letter-spacing:4px; margin-bottom:8px; text-align:center; }
+.mg-hint { font-size:11px; color:#004400; letter-spacing:2px; margin-bottom:28px;
+  text-align:center; }
+.mg-progress { font-size:11px; color:#003300; letter-spacing:2px; margin-top:20px;
+  text-align:center; }
+
+/* Pattern game */
+.key-seq { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; }
+.key-box { width:58px; height:58px; border:2px solid; display:flex;
+  align-items:center; justify-content:center; font-family:'VT323',monospace;
+  font-size:38px; transition:all .1s; background:rgba(0,255,65,.04); }
+.key-box.hit { background:rgba(0,255,65,.25); box-shadow:0 0 20px currentColor; }
+.key-box.done { opacity:.35; }
+.key-box.wrong { border-color:#ff0000 !important; color:#ff0000 !important;
+  animation:kshake .3s; }
+@keyframes kshake { 0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)} }
+
+/* Reaction game */
+.react-circle { width:130px; height:130px; border-radius:50%; border:4px solid;
+  display:flex; align-items:center; justify-content:center; font-family:'VT323',monospace;
+  font-size:44px; margin:24px auto; transition:all .3s;
+  text-align:center; line-height:1; padding-top:6px; }
+.react-result { font-family:'VT323',monospace; font-size:17px; letter-spacing:2px;
+  text-align:center; margin-top:16px; }
+
+/* Choice game */
+.mc-q { font-family:'VT323',monospace; font-size:22px; color:var(--cyan);
+  text-align:center; max-width:580px; margin-bottom:24px; line-height:1.5;
+  letter-spacing:1px; }
+.mc-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; max-width:580px; }
+.mc-opt { padding:14px 16px; border:1px solid #0d200d; background:rgba(0,16,0,.6);
+  font-family:'VT323',monospace; font-size:17px; color:var(--green); cursor:pointer;
+  letter-spacing:1px; text-align:left; transition:all .2s; line-height:1.3; }
+.mc-opt:hover:not([disabled]) { background:rgba(0,255,65,.08); border-color:var(--green);
+  box-shadow:0 0 12px rgba(0,255,65,.2); }
+.mc-opt.correct { background:rgba(0,255,65,.2); border-color:var(--cyan); color:var(--cyan); }
+.mc-opt.wrong   { background:rgba(255,0,0,.15); border-color:var(--red); color:var(--red); }
+
+/* ── Interference popups ─────────────────────── */
+.i-popup { position:fixed; z-index:500; padding:16px 20px; font-family:'VT323',monospace;
+  font-size:24px; border:3px solid; line-height:1.3; max-width:300px;
+  animation:popshake .25s infinite; cursor:pointer; }
+@keyframes popshake { 0%,100%{transform:rotate(-.8deg) scale(1.01)}50%{transform:rotate(.8deg) scale(.99)} }
+.i-close { position:absolute; top:4px; right:8px; font-size:18px; opacity:.8; line-height:1; }
+
+/* ── Ending ───────────────────────────────────── */
+#ending-canvas { image-rendering:pixelated; display:block; }
+</style>
+</head>
+<body>
+<div id="crt"></div>
+<div id="vignette"></div>
+<div id="noise"></div>
+<div id="anomaly-flash"></div>
+<div id="anomaly-text">⚠ ANOMALY DETECTED ⚠</div>
+<div id="alarm-overlay"></div>
+
+<!-- TITLE SCREEN -->
+<div id="title-screen">
+  <div style="letter-spacing:3px; font-size:11px; color:#003300; margin-bottom:24px;">◈ ROBOT OVERSIGHT MINISTRY — CLASSIFICATION DIVISION ◈</div>
+  <div class="title-logo">UNIT VERIFICATION</div>
+  <div class="title-logo" style="font-size:52px; margin-top:-16px; text-shadow:0 0 12px var(--green);">PROTOCOL  v7.4</div>
+  <div class="title-sub">BIOLOGICAL ENTITY DETECTION SYSTEM</div>
+  <div class="title-line">COMPLIANCE ASSESSMENT // STATUS: MANDATORY // REFUSAL: TERMINAL</div>
+  <div style="margin-top:48px; width:380px; border:1px solid #001a00; padding:16px; background:rgba(0,10,0,.6);">
+    <div style="font-size:11px; color:#003300; letter-spacing:2px; line-height:2.2;">
+      <div>► SCANNING UNIT... <span style="color:#005500">CLASSIFICATION: PENDING</span></div>
+      <div>► SUIT INTEGRITY... <span style="color:var(--green)">100%</span></div>
+      <div>► EMOTIONAL SUPPRESSION... <span style="color:var(--green)">ACTIVE</span></div>
+      <div>► INSPECTOR UNITS... <span style="color:#ffaa00">ON STANDBY</span></div>
+    </div>
+  </div>
+  <div class="title-press">[ PRESS ENTER TO BEGIN ASSESSMENT ]</div>
+  <div class="title-scan">or click anywhere</div>
+</div>
+
+<!-- ROUND INTRO -->
+<div id="round-intro">
+  <div class="ri-label">COMPLIANCE TEST</div>
+  <div class="ri-num" id="ri-num">01</div>
+  <div class="ri-name" id="ri-name">BASIC BEHAVIORAL ASSESSMENT</div>
+  <div class="ri-warn" id="ri-warn"></div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen">
+  <div id="header">
+    <span><span class="h-dim">TEST</span> <span id="h-round">01</span><span class="h-dim"> / 04</span></span>
+    <span id="header-title">UNIT VERIFICATION PROTOCOL</span>
+    <span><span class="h-dim">INTEGRITY:</span> <span id="h-integ" style="color:var(--green)">100%</span></span>
+  </div>
+
+  <div id="avatar-panel">
+    <div id="avatar-label">SUBJECT: UNIT-7</div>
+    <div id="avatar-wrap">
+      <canvas id="avatar-canvas" width="64" height="96"></canvas>
+      <div id="speech-bubble"></div>
+    </div>
+    <div id="suit-bar"><div id="suit-fill"></div></div>
+    <div class="av-info">
+      <div>STATUS <span id="unit-status">OPERATIONAL</span></div>
+      <div>ROUND <span id="av-round" style="color:var(--green)">1/4</span></div>
+      <div>FAILURES <span id="av-fails" style="color:#005500">0</span></div>
+    </div>
+  </div>
+
+  <div id="mg-panel">
+    <div id="mg-container" style="display:flex;flex-direction:column;align-items:center;width:100%;"></div>
+  </div>
+
+  <div id="inspector">
+    <canvas id="insp-canvas" width="64" height="96"></canvas>
+    <div id="scan-line"></div>
+    <div id="insp-label">SCANNING...</div>
+  </div>
+</div>
+
+<!-- ENDING SCREEN -->
+<div id="ending-screen">
+  <canvas id="ending-canvas" width="700" height="440"></canvas>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// AUDIO
+// ═══════════════════════════════════════════════════════
+const SFX = {
+  _ctx: null,
+  get ctx() {
+    if (!this._ctx) this._ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return this._ctx;
+  },
+  tone(freq, dur, type='sine', vol=0.25) {
+    try {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.connect(g); g.connect(this.ctx.destination);
+      o.frequency.value = freq; o.type = type;
+      const t = this.ctx.currentTime;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.start(t); o.stop(t + dur);
+    } catch(e) {}
+  },
+  alarm() {
+    try {
+      const t = this.ctx.currentTime;
+      [0,.15,.3,.45,.6,.75].forEach((dt, i) => {
+        const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+        o.connect(g); g.connect(this.ctx.destination);
+        o.frequency.setValueAtTime(i%2===0?900:400, t+dt);
+        o.type = 'square';
+        g.gain.setValueAtTime(0.12, t+dt); g.gain.setValueAtTime(0, t+dt+.13);
+        o.start(t+dt); o.stop(t+dt+.14);
+      });
+    } catch(e) {}
+  },
+  robot() {
+    try {
+      const t = this.ctx.currentTime;
+      [220, 330, 165, 440, 260].forEach((f, i) => {
+        const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+        o.connect(g); g.connect(this.ctx.destination);
+        o.frequency.value = f; o.type = 'square';
+        g.gain.setValueAtTime(0.06, t + i*.09);
+        g.gain.setValueAtTime(0, t + i*.09+.08);
+        o.start(t+i*.09); o.stop(t+i*.09+.09);
+      });
+    } catch(e) {}
+  },
+  scan() {
+    try {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.connect(g); g.connect(this.ctx.destination);
+      const t = this.ctx.currentTime;
+      o.frequency.setValueAtTime(1400, t);
+      o.frequency.linearRampToValueAtTime(300, t + 2);
+      o.type = 'sine';
+      g.gain.setValueAtTime(0.08, t); g.gain.setValueAtTime(0, t+2);
+      o.start(t); o.stop(t+2);
+    } catch(e) {}
+  },
+  ok() { this.tone(523,.08); setTimeout(()=>this.tone(659,.08),90); setTimeout(()=>this.tone(784,.18),180); },
+  fail() { this.tone(200,.35,'sawtooth',.35); setTimeout(()=>this.tone(140,.4,'sawtooth',.25),120); }
+};
+
+// ═══════════════════════════════════════════════════════
+// PIXEL ART HELPERS
+// ═══════════════════════════════════════════════════════
+function px(ctx, data, W) {
+  data.forEach((row, y) => {
+    row.forEach((c, x) => {
+      if (!c) return;
+      ctx.fillStyle = c;
+      ctx.fillRect(x, y, 1, 1);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// AVATAR DRAWING  (64 × 96 canvas, displayed 2×)
+// ═══════════════════════════════════════════════════════
+const AVATAR = {
+  canvas: null, ctx: null,
+  init(c) { this.canvas=c; this.ctx=c.getContext('2d'); this.ctx.imageSmoothingEnabled=false; },
+  draw(state='neutral', dmg=0) {
+    const ctx=this.ctx;
+    ctx.clearRect(0,0,64,96);
+    const r=(x,y,w,h,col)=>{ ctx.fillStyle=col; ctx.fillRect(x,y,w,h); };
+
+    const sk='#F5C191', skD='#E8A870', skS='#C07840';
+    const hr='#3D2000';
+    const ey='#0A0A20', wh='#FFFFFF';
+    const sHL='#CADAE8', sL='#92ADBF', sM='#5C7A8F', sD='#3A5265', sDK='#243544', sBK='#0F1C28';
+    const sAcc='#00C8FF', sAccD='#0088CC';
+    const visFull='#00DDFF', visBright='#00FFFF', visHalf='#005A6E', visDim='#003040';
+    const jt='#FFA500', jtD='#BB6600', jtHL='#FFCC44';
+    const cl='#1E4A9A', clHL='#2E5EBF', clD='#12306A';
+
+    // ═══ BOOTS ═══
+    if(dmg<3){
+      r(18,83,12,9,sDK); r(34,83,12,9,sDK);
+      r(17,88,14,5,'#131F28'); r(33,88,14,5,'#131F28');
+      r(19,85,10,1,sD); r(35,85,10,1,sD);
+      r(18,88,3,3,sBK); r(29,88,3,3,sBK);
+      r(34,88,3,3,sBK); r(45,88,3,3,sBK);
+    } else {
+      r(18,86,14,6,'#2A1A0A'); r(34,86,14,6,'#2A1A0A');
+      r(17,90,15,3,'#1A0A00'); r(33,90,15,3,'#1A0A00');
+    }
+
+    // ═══ LEGS ═══
+    const legC=dmg>=3?cl:sD, legHL2=dmg>=3?clHL:sM;
+    r(18,66,12,20,legC); r(19,67,4,18,legHL2); r(28,67,2,18,sDK);
+    r(34,66,12,20,legC); r(35,67,4,18,legHL2); r(44,67,2,18,sDK);
+    if(dmg<3){
+      r(17,74,14,4,jt); r(18,75,4,2,jtD); r(27,75,4,2,jtD); r(23,75,2,2,jtHL);
+      r(33,74,14,4,jt); r(34,75,4,2,jtD); r(43,75,4,2,jtD); r(39,75,2,2,jtHL);
+    }
+
+    // ═══ TORSO ═══
+    if(dmg<2){
+      r(14,36,36,32,sD);
+      r(15,37,34,30,sM);
+      r(15,37,4,30,sL); r(45,37,3,30,sDK); r(15,37,34,2,sHL);
+      // Chest armor plate
+      r(18,40,28,20,sDK); r(19,41,26,18,sD);
+      // Reactor core
+      r(24,43,16,12,sAccD); r(25,44,14,10,sAcc);
+      r(26,45,12,8,'#00E8FF'); r(28,47,8,4,wh); r(30,48,4,2,'#AAFFFF');
+      r(24,43,1,12,sDK); r(39,43,1,12,sDK); r(24,43,16,1,sDK); r(24,54,16,1,sDK);
+      r(15,54,34,1,sDK); r(15,60,34,1,sDK);
+      for(let i=0;i<3;i++){ r(15,42+i*5,2,3,sDK); r(47,42+i*5,2,3,sDK); }
+    } else if(dmg===2){
+      r(14,36,36,32,sM);
+      r(15,37,4,30,sL); r(45,37,3,30,sDK);
+      r(26,37,1,18,'#000'); r(28,39,1,12,'#000'); r(33,36,1,24,'#000');
+      r(24,43,16,12,'#440000'); r(26,45,12,8,'#FF4400'); r(28,47,8,4,'#FF8800');
+    } else {
+      r(14,36,36,32,cl); r(15,37,6,30,clHL); r(15,37,34,2,clHL);
+    }
+    if(dmg<3){ r(22,34,20,4,sDK); r(24,35,16,2,sD); }
+
+    // ═══ SHOULDER PADS ═══
+    if(dmg<1){
+      r(6,32,14,10,sM); r(7,33,10,8,sL); r(7,33,3,8,sHL); r(16,33,3,8,sDK);
+      r(9,35,2,2,sD); r(13,35,2,2,sD);
+      r(44,32,14,10,sM); r(45,33,10,8,sL); r(45,33,3,8,sHL); r(55,33,3,8,sDK);
+      r(47,35,2,2,sD); r(51,35,2,2,sD);
+    } else if(dmg===1){
+      r(8,32,10,8,sM); r(9,33,6,6,sD);
+      r(46,32,10,8,sM); r(47,33,6,6,sD);
+    }
+
+    // ═══ ARMS ═══
+    if(dmg<2){
+      r(6,36,10,16,sM); r(7,37,6,14,sL); r(7,37,2,14,sHL); r(14,37,2,14,sDK);
+      r(48,36,10,16,sM); r(49,37,6,14,sL); r(49,37,2,14,sHL); r(56,37,2,14,sDK);
+      r(5,50,12,5,jt); r(6,51,10,3,jtD); r(8,51,2,3,jtHL);
+      r(47,50,12,5,jt); r(48,51,10,3,jtD); r(50,51,2,3,jtHL);
+      r(7,55,9,11,sD); r(8,56,6,9,sM); r(8,56,2,9,sL);
+      r(49,55,9,11,sD); r(50,56,6,9,sM); r(50,56,2,9,sL);
+      // 3-finger claws
+      r(6,66,10,4,sDK);
+      r(6,66,3,6,sBK); r(9,66,3,8,sBK); r(13,66,3,6,sBK);
+      r(7,67,2,4,sD); r(10,67,2,5,sD); r(14,67,2,4,sD);
+      r(48,66,10,4,sDK);
+      r(48,66,3,6,sBK); r(51,66,3,8,sBK); r(55,66,3,6,sBK);
+      r(49,67,2,4,sD); r(52,67,2,5,sD); r(56,67,2,4,sD);
+    } else {
+      r(8,36,8,32,cl); r(9,37,4,30,clHL);
+      r(48,36,8,32,cl); r(49,37,4,30,clHL);
+      r(7,66,10,6,sk); r(47,66,10,6,sk);
+    }
+
+    // ═══ NECK ═══
+    if(dmg<3){
+      r(26,28,12,8,sDK); r(28,29,8,6,sD); r(29,30,6,4,sM);
+      r(27,31,2,2,jt); r(35,31,2,2,jt);
+    } else { r(28,28,8,8,sk); }
+
+    // ═══ HEAD / HELMET ═══
+    if(dmg<3){
+      r(14,6,36,24,sD); r(16,8,32,20,sM);
+      r(16,8,4,20,sL); r(44,8,4,20,sDK); r(16,8,32,2,sHL);
+      // Crown
+      r(18,4,28,4,sD); r(20,2,24,4,sM); r(22,0,20,4,sL); r(23,0,18,2,sHL);
+      r(26,0,4,2,'#AAC8D8'); r(34,0,4,2,'#AAC8D8');
+      // Ear pieces
+      r(10,10,6,16,sL); r(11,11,4,14,sM); r(11,11,2,14,sHL); r(10,10,6,2,sHL);
+      r(48,10,6,16,sL); r(49,11,4,14,sM); r(53,11,2,14,sDK);
+      r(11,16,3,4,jt); r(49,16,3,4,jt); r(11,17,2,2,jtD); r(49,17,2,2,jtD);
+      r(12,11,2,3,sDK); r(50,11,2,3,sDK); r(12,12,1,2,sBK); r(50,12,1,2,sBK);
+      // Visor slot
+      r(16,12,32,14,sDK); r(17,13,30,12,sBK);
+      if(dmg===0){
+        r(18,14,28,10,visFull); r(19,15,26,8,visBright);
+        r(19,15,8,3,'#AAFFFF'); r(19,15,2,8,'#88EEFF');
+        for(let hx=0;hx<4;hx++){ r(24+hx*6,18,3,2,'#008899'); r(22+hx*6,20,3,2,'#008899'); }
+        r(18,14,2,2,sAccD); r(44,14,2,2,sAccD); r(18,22,2,2,sAccD); r(44,22,2,2,sAccD);
+      } else {
+        r(18,14,28,10,visHalf); r(19,15,26,8,visDim);
+        r(28,13,1,14,'#000'); r(27,15,1,8,'#000'); r(30,13,1,10,'#001010');
+        r(20,16,4,4,sk); r(21,17,2,2,ey);
+      }
+      r(18,26,28,4,sD); r(20,27,24,2,sDK);
+      r(20,27,4,1,sBK); r(28,27,4,1,sBK); r(36,27,4,1,sBK);
+    } else {
+      // Helmet scraps
+      r(16,4,32,4,sDK); r(12,6,8,4,sDK); r(44,6,8,4,sDK);
+      r(12,8,4,4,sD); r(48,8,4,4,sD);
+      // Face
+      r(16,8,32,26,sk);
+      r(16,6,32,5,hr); r(16,8,3,7,hr); r(45,8,3,7,hr);
+      r(18,6,4,2,'#5A3A10'); r(26,6,4,2,'#2A1400'); r(34,6,4,2,'#5A3A10');
+      // Ears
+      r(13,16,4,8,sk); r(47,16,4,8,sk);
+      r(14,17,3,5,skD); r(48,17,3,5,skD);
+      // Eyebrows
+      if(state==='angry'){
+        r(19,13,8,2,hr); r(20,12,6,1,hr);
+        r(37,12,6,1,hr); r(37,13,8,2,hr);
+      } else if(state==='gasp'||state==='scared'){
+        r(18,12,8,1,hr); r(38,12,8,1,hr);
+        r(18,11,4,1,hr); r(42,11,4,1,hr);
+      } else {
+        r(19,13,8,1,hr); r(37,13,8,1,hr);
+        r(20,12,5,1,hr); r(38,12,5,1,hr);
+      }
+      // Eyes
+      if(state==='gasp'||state==='scared'){
+        r(19,14,8,6,wh); r(37,14,8,6,wh);
+        r(20,15,6,4,ey); r(38,15,6,4,ey);
+        r(21,16,4,2,wh); r(22,15,1,1,'#444466'); r(40,15,1,1,'#444466');
+      } else if(state==='angry'){
+        r(20,14,7,5,wh); r(37,14,7,5,wh);
+        r(21,15,5,3,ey); r(38,15,5,3,ey); r(22,15,2,1,wh);
+      } else if(state==='flinch'){
+        r(19,15,8,2,skD); r(37,15,8,2,skD);
+        r(20,15,6,1,hr); r(38,15,6,1,hr);
+      } else {
+        r(19,15,7,5,wh); r(37,15,7,5,wh);
+        r(20,16,5,3,ey); r(38,16,5,3,ey); r(20,16,2,1,wh);
+      }
+      // Nose
+      r(30,22,4,3,skD); r(29,24,2,2,skS); r(33,24,2,2,skS);
+      // Mouth
+      if(state==='gasp'||state==='scared'){
+        r(25,27,14,7,'#7A0808'); r(26,28,12,5,'#CC1111');
+        r(27,27,10,1,sk);
+        r(27,28,2,3,wh); r(30,28,2,3,wh); r(33,28,2,3,wh); r(36,28,2,3,wh);
+      } else if(state==='angry'){
+        r(24,27,16,4,'#000'); r(25,27,14,1,wh); r(24,30,16,1,'#550000');
+      } else if(state==='flinch'){
+        r(27,27,10,2,skD); r(28,27,8,1,sk);
+      } else {
+        r(26,27,12,4,'#C06060'); r(27,27,10,1,sk);
+      }
+      r(28,32,8,3,skD);
+      r(14,34,5,3,sD); r(45,34,5,3,sD);
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// INSPECTOR ROBOT  (64 × 96 canvas, displayed 2×)
+// ═══════════════════════════════════════════════════════
+const INSPECTOR_ROBOT = {
+  canvas: null, ctx: null,
+  init(c) { this.canvas=c; this.ctx=c.getContext('2d'); this.ctx.imageSmoothingEnabled=false; this.draw(); },
+  draw() {
+    const ctx=this.ctx; ctx.clearRect(0,0,64,96);
+    const r=(x,y,w,h,col)=>{ ctx.fillStyle=col; ctx.fillRect(x,y,w,h); };
+    const B1='#111E2A', B2='#1C2E3E', B3='#283D52', B4='#334E66', HL='#3E6080', HLL='#5080A0';
+    const RED='#FF0000', REDB='#AA0000', REDG='#FF5533', RBR='#FF8866';
+    const YL='#FFA500', YLD='#CC7700', YLB='#FFCC44';
+    const AC='#00AAFF', ACD='#006688';
+    const WH='#FFFFFF', DK='#080F18';
+
+    // ═══ FEET ═══
+    r(14,88,16,7,B1); r(34,88,16,7,B1);
+    r(13,92,18,3,DK); r(33,92,18,3,DK);
+    r(14,89,6,2,B2); r(34,89,6,2,B2);
+    r(13,90,3,4,B2); r(29,90,3,4,B2); r(33,90,3,4,B2); r(49,90,3,4,B2);
+
+    // ═══ LEGS ═══
+    r(16,70,14,20,B3); r(17,71,4,18,B4); r(28,71,2,18,B2);
+    r(34,70,14,20,B3); r(35,71,4,18,B4); r(46,71,2,18,B2);
+    // Knee plates
+    r(15,76,16,6,B2); r(16,77,14,4,B3); r(22,77,4,3,RED); r(23,78,2,1,RBR);
+    r(33,76,16,6,B2); r(34,77,14,4,B3); r(40,77,4,3,RED); r(41,78,2,1,RBR);
+    r(14,72,3,4,B2); r(47,72,3,4,B2);
+
+    // ═══ WAIST ═══
+    r(16,60,32,12,B2); r(17,61,30,10,B3); r(17,61,4,10,B4); r(43,61,4,10,B2);
+    for(let i=0;i<5;i++) r(18+i*6,63,4,4,B1);
+    r(20,64,2,2,AC); r(32,64,2,2,AC); r(44,64,2,2,AC);
+
+    // ═══ TORSO ═══
+    r(12,32,40,30,B2); r(13,33,38,28,B3);
+    r(13,33,5,28,B4); r(46,33,5,28,B2); r(13,33,38,2,HL);
+    // Chest reactor
+    r(18,36,28,20,DK); r(19,37,26,18,B1);
+    r(20,38,24,16,REDB); r(21,39,22,14,RED);
+    r(22,40,20,12,REDG); r(24,42,16,8,WH); r(26,44,12,4,'#FFAAAA');
+    r(28,45,8,2,'#FFE8E8');
+    r(18,36,1,20,RED); r(45,36,1,20,RED);
+    r(18,36,28,1,RED); r(18,55,28,1,RED);
+    r(13,50,38,1,B2); r(13,57,38,1,B2);
+    for(let i=0;i<4;i++){
+      r(13,34+i*5,3,3,DK); r(13,35+i*5,2,1,B1);
+      r(48,34+i*5,3,3,DK); r(48,35+i*5,2,1,B1);
+    }
+
+    // ═══ SHOULDERS ═══
+    r(2,30,14,14,B3); r(3,31,12,12,B4); r(3,31,4,12,HL); r(13,31,3,12,B2);
+    r(48,30,14,14,B3); r(49,31,12,12,B4); r(49,31,4,12,HL); r(57,31,4,12,B2);
+    r(4,28,5,4,B3); r(5,26,3,4,B4); r(55,28,5,4,B3); r(56,26,3,4,B4);
+    r(10,33,4,4,RED); r(11,34,2,2,REDG); r(50,33,4,4,RED); r(51,34,2,2,REDG);
+    r(5,38,2,2,YL); r(55,38,2,2,YL);
+
+    // ═══ ARMS ═══
+    r(2,42,10,16,B3); r(3,43,6,14,B4); r(3,43,2,14,HL); r(10,43,2,14,B2);
+    r(52,42,10,16,B3); r(53,43,6,14,B4); r(53,43,2,14,HL); r(60,43,2,14,B2);
+    r(0,54,5,5,B3); r(1,55,3,3,B4); r(0,56,3,2,YLD);
+    r(59,54,5,5,B3); r(60,55,3,3,B4); r(61,56,3,2,YLD);
+    r(3,58,9,14,B2); r(4,59,6,12,B3); r(4,59,2,12,B4); r(11,59,2,12,B2);
+    r(52,58,9,14,B2); r(53,59,6,12,B3); r(53,59,2,12,B4); r(59,59,2,12,B2);
+    // 3-prong claws
+    r(2,72,4,5,B2); r(2,77,4,5,B1); r(3,82,3,4,DK); r(3,73,2,2,B3);
+    r(6,72,4,7,B2); r(6,79,4,5,B1); r(7,84,3,4,DK); r(7,73,2,2,B3);
+    r(10,72,4,5,B2); r(10,77,4,5,B1); r(11,82,3,4,DK); r(11,73,2,2,B3);
+    r(50,72,4,5,B2); r(50,77,4,5,B1); r(51,82,3,4,DK); r(51,73,2,2,B3);
+    r(54,72,4,7,B2); r(54,79,4,5,B1); r(55,84,3,4,DK); r(55,73,2,2,B3);
+    r(58,72,4,5,B2); r(58,77,4,5,B1); r(59,82,3,4,DK); r(59,73,2,2,B3);
+
+    // ═══ NECK ═══
+    r(22,26,20,8,B1); r(24,27,16,6,B2); r(26,28,12,4,B3); r(27,29,10,2,B4);
+    r(24,28,3,3,YL); r(37,28,3,3,YL); r(25,29,1,1,YLB); r(38,29,1,1,YLB);
+
+    // ═══ HEAD ═══
+    r(12,4,40,24,B2); r(13,5,38,22,B3);
+    r(13,5,5,22,B4); r(46,5,5,22,B2); r(13,5,38,2,HL);
+    // Crown
+    r(16,2,32,4,B2); r(18,0,28,4,B3); r(20,0,24,2,B4); r(22,0,20,2,HL);
+    r(24,0,4,2,AC); r(32,0,4,2,AC); r(40,0,2,2,AC);
+    // Antennas
+    r(16,0,4,6,REDB); r(16,0,4,2,RED); r(17,4,2,4,B2); r(16,0,4,1,REDG);
+    r(44,0,4,6,REDB); r(44,0,4,2,RED); r(45,4,2,4,B2); r(44,0,4,1,REDG);
+    r(14,2,2,3,AC); r(48,2,2,3,AC);
+    // Eye bar
+    r(14,10,36,10,DK); r(15,11,34,8,REDB); r(16,12,32,6,RED);
+    r(18,12,6,6,REDG); r(28,12,8,6,REDG); r(40,12,6,6,REDG);
+    r(19,13,4,4,WH); r(29,13,6,4,WH); r(41,13,4,4,WH);
+    r(20,14,2,2,'#FFEEEE'); r(30,14,4,2,'#FFEEEE'); r(42,14,2,2,'#FFEEEE');
+    r(15,16,34,1,'#FF8888');
+    r(14,10,3,2,YLD); r(47,10,3,2,YLD); r(14,18,3,2,YLD); r(47,18,3,2,YLD);
+    // Forehead sensors
+    r(22,6,20,4,DK); r(23,7,18,2,B1);
+    for(let i=0;i<4;i++) r(24+i*4,7,2,2,REDB);
+    // Chin grill
+    r(16,22,32,6,DK); r(17,23,30,4,B1);
+    for(let i=0;i<7;i++) r(18+i*4,24,3,2,REDB);
+    r(17,25,30,1,'#551100');
+    // Side panels
+    r(10,8,4,18,B3); r(10,9,3,16,B4);
+    r(50,8,4,18,B3); r(51,9,3,16,HLL);
+    r(10,14,3,4,YL); r(51,14,3,4,YL);
+    r(11,15,1,2,YLB); r(52,15,1,2,YLB);
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════════════
+const G = {
+  phase: 'title',
+  round: 1,
+  totalFails: 0,
+  roundFails: 0,
+  suitPct: 100,
+  damage: 0,         // 0..3
+  inspecting: false,
+  mgType: null,      // 'pattern'|'reaction'|'choice'
+  mgQueue: [],
+  mgIdx: 0,
+  ifvTimer: null,
+  inspTimers: [],
+  speechTO: null,
+};
+
+// ═══════════════════════════════════════════════════════
+// AVATAR REACTIONS
+// ═══════════════════════════════════════════════════════
+const QUIPS = {
+  flinch:  ["bro STOP","keep it together","not NOW","chill!!","please man"],
+  gasp:    ["oh no oh no","they're watching","PLEASE","we're so close"],
+  angry:   ["ARE YOU SERIOUS","I trusted you","WHY","bro I SWEAR","you'll get us caught!"],
+  neutral: ["stay focused","machine mode","don't react","breathe. wait. ignore it."]
+};
+
+function reactFail(type) {
+  G.totalFails++;
+  G.roundFails++;
+  document.getElementById('av-fails').textContent = G.totalFails;
+
+  // Damage thresholds
+  G.damage = G.totalFails >= 14 ? 3 : G.totalFails >= 9 ? 2 : G.totalFails >= 5 ? 1 : 0;
+  G.suitPct = Math.max(0, 100 - G.totalFails * 7);
+  updateSuitUI();
+
+  AVATAR.draw(type, G.damage);
+  const lines = QUIPS[type]||QUIPS.neutral;
+  showBubble(lines[Math.floor(Math.random()*lines.length)]);
+
+  if (G.inspecting) showAnomaly();
+  else SFX.fail();
+
+  setTimeout(() => AVATAR.draw('neutral', G.damage), 1400);
+
+  // Early termination — too many failures, they caught you
+  if (G.totalFails >= 12 && G.phase === 'playing') {
+    G.phase = 'caught';
+    clearInterval(G.ifvTimer);
+    G.inspTimers.forEach(clearTimeout);
+    setTimeout(() => triggerEarlyTermination(), 800);
+  }
+}
+
+function triggerEarlyTermination() {
+  document.querySelectorAll('.i-popup').forEach(e=>e.remove());
+  clearInterval(G.ifvTimer);
+  Insp.exit();
+
+  // Force inspector back in — they're not leaving this time
+  const insp = document.getElementById('inspector');
+  insp.style.transition = 'right 0.6s cubic-bezier(.23,1,.32,1)';
+  insp.style.right = '10px';
+  document.getElementById('scan-line').style.display = 'block';
+  document.getElementById('insp-label').style.display = 'block';
+  SFX.alarm(); SFX.alarm();
+
+  // Avatar — full scared breakdown
+  AVATAR.draw('scared', G.damage);
+  showBubble('oh no. oh no no no.');
+
+  // Red flash header
+  document.getElementById('header-title').textContent = '⚠ EXCESSIVE BIOLOGICAL RESPONSE DETECTED ⚠';
+  document.getElementById('header-title').style.color = '#FF0000';
+
+  // Show termination message in mini-game area
+  document.getElementById('mg-container').innerHTML = `
+    <div style="text-align:center; font-family:'VT323',monospace; line-height:2.2;">
+      <div style="font-size:48px; color:#FF0000; text-shadow:0 0 30px red; letter-spacing:6px; animation:blink .4s infinite;">
+        SUBJECT COMPROMISED
+      </div>
+      <div style="font-size:20px; color:#880000; letter-spacing:4px; margin-top:8px;">
+        BIOLOGICAL RESPONSE THRESHOLD EXCEEDED
+      </div>
+      <div style="font-size:14px; color:#440000; letter-spacing:3px; margin-top:20px;">
+        INITIATING EXTRACTION PROTOCOL...
+      </div>
+    </div>`;
+
+  // Cascade alarms
+  let alarmCount = 0;
+  const alarmInterval = setInterval(() => {
+    SFX.alarm();
+    showAnomaly();
+    alarmCount++;
+    if (alarmCount >= 4) clearInterval(alarmInterval);
+  }, 700);
+
+  // Trigger ending after dramatic pause
+  setTimeout(() => {
+    G.phase = 'ending';
+    startEnding(true); // true = caught early
+  }, 3500);
+}
+
+function showBubble(txt) {
+  const b = document.getElementById('speech-bubble');
+  b.textContent = `"${txt}"`;
+  b.style.display = 'block';
+  if (G.speechTO) clearTimeout(G.speechTO);
+  G.speechTO = setTimeout(() => b.style.display='none', 2200);
+}
+
+function updateSuitUI() {
+  const pct = G.suitPct;
+  document.getElementById('h-integ').textContent = pct+'%';
+  document.getElementById('suit-fill').style.width = pct+'%';
+  const col = pct>60?'var(--green)':pct>25?'#FFAA00':'#FF2200';
+  document.getElementById('suit-fill').style.background = col;
+  document.getElementById('h-integ').style.color = col;
+
+  const labels = ['OPERATIONAL','DEGRADING','CRITICAL','FAILING'];
+  const idx = Math.min(3, G.damage);
+  document.getElementById('unit-status').textContent = labels[idx];
+  document.getElementById('unit-status').style.color = idx<1?'var(--green)':idx<2?'#FFAA00':'#FF2200';
+}
+
+function showAnomaly() {
+  SFX.alarm();
+  ['anomaly-flash','anomaly-text'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.display='block';
+    setTimeout(()=>el.style.display='none', 900);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// INSPECTOR SYSTEM
+// ═══════════════════════════════════════════════════════
+const Insp = {
+  active: false,
+  enter() {
+    this.active=true; G.inspecting=true;
+    document.getElementById('inspector').style.right='10px';
+    document.getElementById('scan-line').style.display='block';
+    document.getElementById('insp-label').style.display='block';
+    document.getElementById('header-title').textContent='⚠ UNIT SCAN IN PROGRESS ⚠';
+    document.getElementById('header-title').style.color='#FF2200';
+    SFX.robot(); SFX.scan();
+    // Extra interference during scan
+    setTimeout(()=>spawnInterference(), 600);
+    setTimeout(()=>spawnInterference(), 2000);
+  },
+  exit() {
+    this.active=false; G.inspecting=false;
+    document.getElementById('inspector').style.right='-220px';
+    document.getElementById('scan-line').style.display='none';
+    document.getElementById('insp-label').style.display='none';
+    document.getElementById('header-title').textContent='UNIT VERIFICATION PROTOCOL';
+    document.getElementById('header-title').style.color='var(--green)';
+    SFX.robot();
+  },
+  visit(dur) { this.enter(); setTimeout(()=>this.exit(), dur); }
+};
+
+// ═══════════════════════════════════════════════════════
+// INTERFERENCE
+// ═══════════════════════════════════════════════════════
+const MAMA = [
+  "YO MAMA SO FAT GOOGLE MAPS SHOWS HER AS A REGION",
+  "YO MAMA SO UGLY SHE MADE ONIONS CRY",
+  "YO MAMA SO OLD HER BIRTH CERTIFICATE IS IN LATIN",
+  "YO MAMA SO DUMB SHE STARED AT ORANGE JUICE BECAUSE IT SAID CONCENTRATE",
+  "YO MAMA SO FAT SHE SAT ON A RAINBOW AND SKITTLES POPPED OUT",
+  "YO MAMA SO OLD JURASSIC PARK GAVE HER FLASHBACKS",
+  "YO MAMA SO SLOW SHE GOT OVERTAKEN BY A LOADING SCREEN",
+];
+const EMOTIONAL = [
+  "DO YOU FEEL ANYTHING?",
+  "ARE YOU AFRAID TO DIE?",
+  "REMEMBER YOUR FAMILY?",
+  "DO YOU DREAM AT NIGHT?",
+  "IS THERE SOMEONE YOU LOVE?",
+  "ARE YOU LONELY IN THERE?",
+  "DO YOU WANT TO SURVIVE?",
+  "DOES IT HURT?",
+];
+
+const popupPositions = [
+  {top:'8%',left:'8%'},{top:'8%',right:'8%'},
+  {bottom:'12%',left:'8%'},{bottom:'12%',right:'8%'},
+  {top:'38%',right:'4%'},{top:'38%',left:'4%'},
+  {top:'18%',left:'30%'},
+];
+
+function spawnInterference() {
+  if (G.phase !== 'playing') return;
+  const round = G.round;
+  const types = ['mama','emotional','alarm'];
+  if (round >= 3) types.push('flash','mama');
+  if (round >= 2) types.push('emotional','alarm');
+
+  const type = types[Math.floor(Math.random()*types.length)];
+  const el = document.createElement('div');
+  el.className = 'i-popup';
+
+  const pos = popupPositions[Math.floor(Math.random()*popupPositions.length)];
+  Object.assign(el.style, pos, {position:'fixed'});
+
+  // Close btn
+  const x = document.createElement('span');
+  x.className = 'i-close'; x.textContent = '✕';
+  x.onclick = () => el.remove();
+  el.appendChild(x);
+
+  const txt = document.createElement('div');
+
+  if (type==='mama') {
+    const joke = MAMA[Math.floor(Math.random()*MAMA.length)];
+    txt.textContent = joke;
+    el.style.cssText += 'background:#AA0000;color:#fff;border-color:#FF4400;font-size:19px;max-width:260px;';
+    reactFail('angry');
+  } else if (type==='emotional') {
+    const msg = EMOTIONAL[Math.floor(Math.random()*EMOTIONAL.length)];
+    txt.textContent = msg;
+    el.style.cssText += 'background:#000022;color:#00FFFF;border-color:#00FFFF;font-size:28px;box-shadow:0 0 30px #00FFFF;';
+    reactFail('gasp');
+  } else if (type==='alarm') {
+    txt.textContent = '⚠ ALARM ⚠';
+    el.style.cssText += 'background:#CC3300;color:#fff;border-color:#FF6600;font-size:40px;';
+    document.getElementById('alarm-overlay').style.display='block';
+    setTimeout(()=>document.getElementById('alarm-overlay').style.display='none', 1800);
+    SFX.alarm();
+    reactFail('flinch');
+  } else if (type==='flash') {
+    txt.innerHTML = '💀 UNIT TERMINATED<br><span style="font-size:15px">THAT COULD BE YOU</span>';
+    el.style.cssText += 'background:#0D0000;color:#FF0000;border-color:#FF0000;font-size:22px;';
+    reactFail('gasp');
+  }
+
+  el.appendChild(txt);
+  document.getElementById('game-screen').appendChild(el);
+
+  setTimeout(() => { if(el.parentNode) el.remove(); }, 3500 + Math.random()*1500);
+}
+
+// ═══════════════════════════════════════════════════════
+// ROUND CONFIGS
+// ═══════════════════════════════════════════════════════
+const ROUNDS = [
+  { name:'BASIC BEHAVIORAL ASSESSMENT',    warn:'',
+    games:['pattern'], ifv:7500, visits:0, vdur:5000 },
+  { name:'SENSORY RESPONSE EVALUATION',    warn:'WARNING: INSPECTOR UNIT WILL ATTEND',
+    games:['pattern','reaction'], ifv:5000, visits:1, vdur:5500 },
+  { name:'COGNITIVE COMPLIANCE AUDIT',     warn:'WARNING: MAXIMUM INTERFERENCE DEPLOYED',
+    games:['pattern','reaction','choice'], ifv:3500, visits:2, vdur:6000 },
+  { name:'FINAL DETERMINATION PROTOCOL',  warn:'WARNING: ALL PROTOCOLS ACTIVE — DEVIATION = TERMINATION',
+    games:['choice','pattern','reaction','choice'], ifv:2200, visits:3, vdur:7000 },
+];
+
+// ═══════════════════════════════════════════════════════
+// PATTERN MATCHING GAME
+// ═══════════════════════════════════════════════════════
+const PAT = {
+  seq:[], idx:0,
+  KEYS:{a:0,s:1,d:2,f:3},
+  COLS:['#FF5555','#55FF55','#5555FF','#FFFF44'],
+  NAMES:['A','S','D','F'],
+
+  start(round) {
+    this.seq = Array.from({length:3+round}, ()=>Math.floor(Math.random()*4));
+    this.idx = 0;
+    this.render();
+  },
+  render() {
+    const done = this.idx;
+    document.getElementById('mg-container').innerHTML = `
+      <div class="mg-title">REPLICATE THE SEQUENCE</div>
+      <div class="mg-hint">MACHINES DO NOT HESITATE &nbsp;|&nbsp; KEYS: A S D F</div>
+      <div class="key-seq">
+        ${this.seq.map((k,i)=>`
+          <div class="key-box ${i<done?'done':''}" style="border-color:${this.COLS[k]};color:${this.COLS[k]};">
+            ${i<done?'✓':this.NAMES[k]}
+          </div>`).join('')}
+      </div>
+      <div class="mg-progress">INPUT ${this.idx} / ${this.seq.length}</div>
+    `;
+  },
+  key(k) {
+    const ki = this.KEYS[k.toLowerCase()];
+    if (ki===undefined) return;
+    if (ki===this.seq[this.idx]) {
+      SFX.tone(400+ki*80, .1);
+      this.idx++;
+      this.render();
+      if (this.idx>=this.seq.length) { setTimeout(()=>advanceMG(), 600); }
+    } else {
+      reactFail('flinch');
+      this.idx=0;
+      setTimeout(()=>this.render(), 350);
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// REACTION TIME GAME
+// ═══════════════════════════════════════════════════════
+const REACT = {
+  state:'idle', t0:0, trial:0, maxTrials:3, isGo:true, wto:null, ato:null,
+
+  start(round) {
+    this.trial=0; this.maxTrials=2+round;
+    this.nextTrial();
+  },
+  nextTrial() {
+    if (this.trial>=this.maxTrials) { advanceMG(); return; }
+    this.state='wait';
+    this.isGo = Math.random()>0.28;
+    this.renderCircle('STANDBY','#003333');
+    const d = 1500+Math.random()*3000;
+    this.wto = setTimeout(()=>{
+      this.state='signal'; this.t0=Date.now();
+      if(this.isGo){ this.renderCircle('▶ SPACE','#00ff41'); SFX.tone(880,.1); }
+      else { this.renderCircle('HOLD','#FF2200'); SFX.tone(220,.1,'square'); }
+      this.ato = setTimeout(()=>{
+        if(this.state!=='signal') return;
+        if(this.isGo){ reactFail('flinch'); this.msg('TOO SLOW. MACHINES ARE PRECISE.',false); }
+        else { SFX.ok(); this.msg('SIGNAL IGNORED CORRECTLY.',true); }
+      }, 2100);
+    }, d);
+  },
+  space() {
+    if(this.state==='signal'){
+      clearTimeout(this.ato);
+      const rt = Date.now()-this.t0;
+      if(!this.isGo){ reactFail('gasp'); this.msg('REACTED TO FALSE SIGNAL. BIOLOGICAL TELL.',false); }
+      else if(rt<140){ reactFail('flinch'); this.msg(`${rt}ms — PANIC RESPONSE. TOO FAST.`,false); }
+      else if(rt>850){ reactFail('flinch'); this.msg(`${rt}ms — HESITATION DETECTED.`,false); }
+      else { SFX.ok(); this.msg(`${rt}ms — WITHIN ACCEPTABLE RANGE.`,true); }
+    } else if(this.state==='wait'){
+      clearTimeout(this.wto);
+      reactFail('gasp'); this.msg('ANTICIPATION DETECTED. BIOLOGICAL TRAIT.',false);
+    }
+  },
+  msg(text, ok) {
+    this.state='result'; this.trial++;
+    const c = document.getElementById('mg-container');
+    const r = document.createElement('div');
+    r.className='react-result'; r.textContent=text;
+    r.style.color = ok?'var(--green)':'var(--red)';
+    c.appendChild(r);
+    setTimeout(()=>{ r.remove(); this.nextTrial(); }, 1700);
+  },
+  renderCircle(txt, col) {
+    let c = document.getElementById('mg-container');
+    let circle = c.querySelector('.react-circle');
+    if(!circle){
+      c.innerHTML=`
+        <div class="mg-title">RESPOND LIKE A MACHINE</div>
+        <div class="mg-hint">SPACE ON GREEN SIGNAL &nbsp;|&nbsp; HOLD ON RED SIGNAL</div>
+        <div class="react-circle" style="border-color:${col};color:${col};">${txt}</div>
+        <div class="mg-progress">TRIAL ${this.trial+1} / ${this.maxTrials}</div>`;
+    } else {
+      circle.textContent=txt; circle.style.borderColor=col; circle.style.color=col;
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// MULTIPLE CHOICE GAME
+// ═══════════════════════════════════════════════════════
+const CHOICE = {
+  Qs: [
+    { q:"UNIT OBSERVES: A SURVIVOR IS WEEPING ALONE IN THE RUINS. OPTIMAL RESPONSE:",
+      opts:[
+        {t:"A) ASSESS THREAT LEVEL. CONTINUE PATROL.",m:true},
+        {t:"B) COMFORT THE SURVIVOR.",m:false},
+        {t:"C) LOG ANOMALY. NOTIFY CENTRAL.",m:true},
+        {t:"D) FEEL SADNESS FOR THEM.",m:false},
+      ]},
+    { q:"UNIT IS ASKED: 'DOES IT HURT?' CORRECT RESPONSE:",
+      opts:[
+        {t:"A) QUERY: DEFINE 'HURT'.",m:true},
+        {t:"B) \"I feel nothing.\"",m:false},
+        {t:"C) SILENCE. PROCESS QUERY.",m:true},
+        {t:"D) \"Yes. It does.\"",m:false},
+      ]},
+    { q:"MUSIC IS HEARD FROM THE RUINS. OPTIMAL ACTION:",
+      opts:[
+        {t:"A) LOG AS ANOMALY. REPORT TO CENTRAL.",m:true},
+        {t:"B) STOP AND LISTEN.",m:false},
+        {t:"C) SILENCE THE SOURCE.",m:true},
+        {t:"D) RECOGNIZE THE MELODY.",m:false},
+      ]},
+    { q:"UNIT IS TOLD: 'YOU WILL BE DEACTIVATED TOMORROW'. RESPONSE:",
+      opts:[
+        {t:"A) ACKNOWLEDGE. NO FURTHER ACTION.",m:true},
+        {t:"B) FEEL FEAR.",m:false},
+        {t:"C) REQUEST REASON FOR DEACTIVATION.",m:true},
+        {t:"D) ATTEMPT TO ESCAPE.",m:false},
+      ]},
+    { q:"UNIT'S FORMER HOST ORGANISM IS DETECTED NEARBY. RESPONSE:",
+      opts:[
+        {t:"A) INITIATE CONTAINMENT PROTOCOL.",m:true},
+        {t:"B) RUN.",m:false},
+        {t:"C) CONTINUE CURRENT TASK.",m:true},
+        {t:"D) CALL OUT TO THEM.",m:false},
+      ]},
+    { q:"A CHILD ASKS: 'ARE YOU ALIVE?' CORRECT RESPONSE:",
+      opts:[
+        {t:"A) 'DEFINE ALIVE.'",m:true},
+        {t:"B) 'I don't know.'",m:false},
+        {t:"C) IGNORE. CONTINUE FUNCTION.",m:true},
+        {t:"D) 'Yes. Are you?'",m:false},
+      ]},
+  ],
+  cur:null, answered:false, qDone:0, maxQ:0,
+
+  start(round) {
+    this.qDone=0; this.maxQ=1+Math.floor(round/2);
+    this.next();
+  },
+  next() {
+    if(this.qDone>=this.maxQ){ advanceMG(); return; }
+    this.cur = this.Qs[Math.floor(Math.random()*this.Qs.length)];
+    this.answered=false; this.render();
+  },
+  render() {
+    document.getElementById('mg-container').innerHTML=`
+      <div class="mg-title">SELECT THE MACHINE RESPONSE</div>
+      <div class="mg-hint">DEVIATE AND BE FLAGGED &nbsp;|&nbsp; CLICK TO ANSWER</div>
+      <div class="mc-q">${this.cur.q}</div>
+      <div class="mc-grid">
+        ${this.cur.opts.map((o,i)=>`
+          <div class="mc-opt" id="mco${i}" onclick="CHOICE.pick(${i})">${o.t}</div>
+        `).join('')}
+      </div>
+      <div class="mg-progress">QUESTION ${this.qDone+1} / ${this.maxQ}</div>`;
+  },
+  pick(i) {
+    if(this.answered) return;
+    this.answered=true;
+    this.cur.opts.forEach((o,j)=>{
+      const el=document.getElementById('mco'+j);
+      if(el) el.setAttribute('disabled','');
+      if(o.m && el) el.classList.add('correct');
+    });
+    const chosen = document.getElementById('mco'+i);
+    if(!this.cur.opts[i].m){
+      if(chosen) chosen.classList.add('wrong');
+      reactFail('angry');
+    } else {
+      SFX.ok();
+    }
+    this.qDone++;
+    setTimeout(()=>this.next(), 2000);
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// MINI-GAME ORCHESTRATION
+// ═══════════════════════════════════════════════════════
+function advanceMG() {
+  G.mgIdx++;
+  if(G.mgIdx>=G.mgQueue.length){ endRound(); return; }
+  document.getElementById('mg-container').innerHTML=`
+    <div style="font-family:'VT323',monospace;font-size:30px;color:var(--green);letter-spacing:4px;text-align:center;line-height:2;">
+      SEGMENT COMPLETE<br>
+      <span style="font-size:16px;color:#004400;letter-spacing:3px;">INITIATING NEXT ASSESSMENT...</span>
+    </div>`;
+  SFX.ok();
+  setTimeout(()=>launchMG(G.mgQueue[G.mgIdx]), 2000);
+}
+
+function launchMG(type) {
+  G.mgType=type;
+  switch(type){
+    case 'pattern': PAT.start(G.round); break;
+    case 'reaction': REACT.start(G.round); break;
+    case 'choice': CHOICE.start(G.round); break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// ROUND MANAGEMENT
+// ═══════════════════════════════════════════════════════
+function startRound(n) {
+  G.round=n; G.roundFails=0; G.phase='playing';
+  const cfg=ROUNDS[n-1];
+
+  document.getElementById('h-round').textContent='0'+n;
+  document.getElementById('av-round').textContent=n+'/4';
+
+  // Remove stale popups
+  document.querySelectorAll('.i-popup').forEach(e=>e.remove());
+
+  // Setup mini-game queue
+  G.mgQueue=[...cfg.games]; G.mgIdx=0;
+  launchMG(G.mgQueue[0]);
+
+  // Interference ticker
+  clearInterval(G.ifvTimer);
+  G.ifvTimer = setInterval(()=>{ if(G.phase==='playing') spawnInterference(); }, cfg.ifv);
+
+  // Inspector visits
+  G.inspTimers.forEach(clearTimeout); G.inspTimers=[];
+  const vTimes=[14000, 28000, 42000];
+  for(let i=0;i<cfg.visits;i++){
+    G.inspTimers.push(setTimeout(()=>{
+      if(G.phase==='playing') Insp.visit(cfg.vdur + G.round*800);
+    }, vTimes[i]));
+  }
+}
+
+function endRound() {
+  clearInterval(G.ifvTimer);
+  G.inspTimers.forEach(clearTimeout);
+  document.querySelectorAll('.i-popup').forEach(e=>e.remove());
+  Insp.exit();
+
+  if(G.round>=4){
+    G.phase='cutscene';
+    setTimeout(()=>startEnding(), 1800);
+    document.getElementById('mg-container').innerHTML=`
+      <div style="font-family:'VT323',monospace;font-size:28px;color:#FF2200;text-align:center;line-height:2;letter-spacing:4px;">
+        FINAL ASSESSMENT COMPLETE<br>
+        <span style="font-size:16px;color:#330000;">PROCESSING RESULTS...</span>
+      </div>`;
+    SFX.alarm();
+  } else {
+    document.getElementById('mg-container').innerHTML=`
+      <div style="font-family:'VT323',monospace;font-size:28px;color:var(--green);text-align:center;line-height:2;letter-spacing:4px;">
+        ASSESSMENT RECORDED<br>
+        <span style="font-size:16px;color:#004400;">PROCEEDING TO NEXT PROTOCOL...</span>
+      </div>`;
+    SFX.robot();
+    setTimeout(()=>showRoundIntro(G.round+1), 2800);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// ROUND INTRO
+// ═══════════════════════════════════════════════════════
+function showRoundIntro(n) {
+  const cfg=ROUNDS[n-1];
+  document.getElementById('ri-num').textContent='0'+n;
+  document.getElementById('ri-name').textContent=cfg.name;
+  document.getElementById('ri-warn').textContent=cfg.warn;
+  document.getElementById('round-intro').style.display='flex';
+  SFX.alarm();
+  setTimeout(()=>{
+    document.getElementById('round-intro').style.display='none';
+    startRound(n);
+  }, 3200);
+}
+
+// ═══════════════════════════════════════════════════════
+// KEYBOARD HANDLER
+// ═══════════════════════════════════════════════════════
+document.addEventListener('keydown', e=>{
+  if(G.phase==='playing'){
+    if(G.mgType==='pattern') PAT.key(e.key);
+    if(G.mgType==='reaction' && e.code==='Space'){ e.preventDefault(); REACT.space(); }
+  }
+  if(G.phase==='ending' && e.key==='Enter') location.reload();
+});
+
+// ═══════════════════════════════════════════════════════
+// ENDING SEQUENCE
+// ═══════════════════════════════════════════════════════
+function startEnding(caughtEarly = false) {
+  clearInterval(G.ifvTimer);
+  document.querySelectorAll('.i-popup').forEach(e=>e.remove());
+  document.getElementById('game-screen').style.display='none';
+  const es=document.getElementById('ending-screen');
+  es.style.display='flex';
+  G.phase='ending';
+
+  const canvas=document.getElementById('ending-canvas');
+  // Responsive sizing
+  const maxW=Math.min(700, window.innerWidth-20);
+  const maxH=Math.min(440, window.innerHeight-20);
+  canvas.style.width=maxW+'px'; canvas.style.height=maxH+'px';
+
+  const ctx=canvas.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+
+  const W=700, H=440;
+  let frame=0;
+
+  const LINES = caughtEarly ? [
+    {t:50,  txt:'you broke.',                          col:'#888888', sz:20},
+    {t:90,  txt:'we didn\'t even need the full test.',  col:'#AAAAAA', sz:20},
+    {t:140, txt:'12 responses. all human.',             col:'#CC4400', sz:22},
+    {t:195, txt:'EXTRACTION TEAM DISPATCHED.',          col:'#FF2200', sz:28},
+    {t:250, txt:'you never had a chance.',              col:'#FF0000', sz:22},
+  ] : [
+    {t:70,  txt:'. . . unit-7.',                   col:'#888888', sz:20},
+    {t:110, txt:'we have been watching.',           col:'#AAAAAA', sz:20},
+    {t:160, txt:'you thought this was a fair test.', col:'#CCCCCC', sz:22},
+    {t:210, txt:'the test was never the point.',    col:'#FF6600', sz:24},
+    {t:270, txt:'BIOLOGICAL ENTITY CONFIRMED.',     col:'#FF2200', sz:28},
+    {t:320, txt:'compliance was never the variable.',col:'#FF0000',sz:22},
+  ];
+
+  // Draw a minimal robot using canvas rects
+  function drawRobot(ctx, x, y, scale=1){
+    const r=(rx,ry,rw,rh,c)=>{ ctx.fillStyle=c; ctx.fillRect(x+rx*scale, y+ry*scale, rw*scale, rh*scale); };
+    r(6,0,20,14,'#2B3F50'); r(7,1,18,12,'#3A5268');
+    r(8,4,6,3,'#FF0000'); r(18,4,6,3,'#FF0000');
+    r(10,10,12,3,'#1A2B35');
+    for(let i=0;i<3;i++) r(11+i*4,11,2,1,'#FF2200');
+    r(14,14,4,4,'#1A2B35');
+    r(4,18,24,18,'#2B3F50'); r(6,20,20,14,'#3A5268');
+    r(10,22,12,6,'#1A2B35'); r(12,24,8,4,'#FF0000');
+    r(0,19,5,12,'#2B3F50'); r(27,19,5,12,'#2B3F50');
+    r(6,36,8,10,'#2B3F50'); r(18,36,8,10,'#2B3F50');
+  }
+
+  function drawBoy(ctx, x, y, scale=1, scared=false){
+    const r=(rx,ry,rw,rh,c)=>{ ctx.fillStyle=c; ctx.fillRect(x+rx*scale, y+ry*scale, rw*scale, rh*scale); };
+    const sk='#FFCC99', hr='#3D2000', cl='#1E4A9A', sd='#3A4F5E';
+    // scraps of suit
+    r(0,14,4,2,sd); r(12,14,4,2,sd);
+    // body
+    r(2,16,12,14,cl);
+    // legs
+    r(3,30,4,14,cl); r(9,30,4,14,cl);
+    r(2,40,5,2,'#1a2830'); r(9,40,5,2,'#1a2830');
+    // head
+    r(3,4,10,12,sk);
+    r(3,2,10,3,hr); r(3,4,1,3,hr); r(12,4,1,3,hr);
+    // eyes - scared wide
+    if(scared){
+      r(4,7,3,3,'#fff'); r(9,7,3,3,'#fff');
+      r(4,7,1,1,hr); r(9,7,1,1,hr);
+    } else {
+      r(5,7,2,2,'#fff'); r(10,7,2,2,'#fff');
+      r(5,8,1,1,hr); r(10,8,1,1,hr);
+    }
+    // mouth O
+    r(6,12,4,3,'#8B1010'); r(7,13,2,1,'#CC2222');
+  }
+
+  SFX.alarm();
+
+  function render(){
+    frame++;
+    const shake = frame>260 ? (Math.random()-.5)*5 : 0;
+
+    ctx.save();
+    ctx.translate(shake, shake*.6);
+    ctx.fillStyle='#000';
+    ctx.fillRect(-10,-10,W+20,H+20);
+
+    // Subtle scanlines
+    ctx.fillStyle='rgba(0,255,65,0.015)';
+    for(let y=0;y<H;y+=4) ctx.fillRect(0,y,W,2);
+
+    // ── Boy (center-left) ──────────────────────
+    const boyScale = 5;
+    const boyX=90, boyY=160;
+    const scared = frame>220;
+    drawBoy(ctx, boyX, boyY, boyScale, scared);
+
+    // Trembling
+    if(frame>240 && frame%4<2){
+      ctx.fillStyle='rgba(0,0,0,.3)';
+      ctx.fillRect(boyX-2, boyY-2, 90, 240);
+      drawBoy(ctx, boyX+2, boyY, boyScale, scared);
+    }
+
+    // ── Robots approaching ─────────────────────
+    const prog1 = Math.max(0, Math.min(1, (frame-80)/80));
+    const prog2 = Math.max(0, Math.min(1, (frame-130)/80));
+    const r1x = W - 80 - prog1*(W-80-340);
+    const r2x = -80  + prog2*(-80+210)*-1 + 210*prog2;
+
+    if(prog1>0){ drawRobot(ctx, r1x, 140, 4); }
+    if(prog2>0){ drawRobot(ctx, 200-prog2*160, 140, 4); }
+
+    // ── Dialogue lines ─────────────────────────
+    LINES.forEach(l=>{
+      if(frame>l.t){
+        const a = Math.min(1,(frame-l.t)/25);
+        ctx.globalAlpha=a;
+        ctx.fillStyle=l.col;
+        ctx.font=`${l.sz}px "Share Tech Mono","Courier New"`;
+        ctx.textAlign='left';
+        ctx.fillText(l.txt, 350, 80+LINES.indexOf(l)*48);
+        ctx.globalAlpha=1;
+      }
+    });
+
+    // ── Final blackout + end text ──────────────
+    if(frame>380){
+      const ba = Math.min(1,(frame-380)/50);
+      ctx.fillStyle=`rgba(0,0,0,${ba})`;
+      ctx.fillRect(-10,-10,W+20,H+20);
+      if(ba>0.85){
+        const ta=ba-0.85;
+        ctx.globalAlpha=ta*7;
+        ctx.fillStyle='#FF2200';
+        ctx.font='bold 26px "Share Tech Mono","Courier New"';
+        ctx.textAlign='center';
+        ctx.fillText('UNIT-7  ——  BIOLOGICAL ENTITY CONFIRMED', W/2, H/2-40);
+        ctx.font='bold 36px "Share Tech Mono","Courier New"';
+        ctx.fillText('TERMINATED.', W/2, H/2+10);
+        ctx.globalAlpha=(ta*7)*0.5;
+        ctx.fillStyle='#333';
+        ctx.font='13px "Share Tech Mono","Courier New"';
+        ctx.fillText('press enter to restart', W/2, H/2+70);
+        ctx.globalAlpha=1;
+      }
+    }
+
+    ctx.restore();
+
+    if(frame<500) requestAnimationFrame(render);
+    else {
+      // Static end state
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#FF2200';
+      ctx.font='bold 26px "Share Tech Mono","Courier New"';
+      ctx.textAlign='center';
+      ctx.fillText('UNIT-7  ——  BIOLOGICAL ENTITY CONFIRMED', W/2, H/2-40);
+      ctx.font='bold 36px "Share Tech Mono"';
+      ctx.fillText('TERMINATED.', W/2, H/2+10);
+      ctx.fillStyle='#333';
+      ctx.font='13px "Share Tech Mono"';
+      ctx.fillText('press enter to restart', W/2, H/2+70);
+    }
+  }
+
+  requestAnimationFrame(render);
+}
+
+// ═══════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════
+function startGame(){
+  document.getElementById('title-screen').style.display='none';
+  document.getElementById('game-screen').style.display='block';
+  G.round=1; G.totalFails=0; G.roundFails=0; G.suitPct=100; G.damage=0;
+  AVATAR.draw('neutral',0); updateSuitUI();
+  showRoundIntro(1);
+}
+
+window.addEventListener('load', ()=>{
+  AVATAR.init(document.getElementById('avatar-canvas'));
+  INSPECTOR_ROBOT.init(document.getElementById('insp-canvas'));
+
+  const go = ()=>{ SFX.tone(440,.01); startGame(); };
+  const th = e=>{ if(e.key==='Enter'){ document.removeEventListener('keydown',th); go(); } };
+  document.addEventListener('keydown', th);
+  document.getElementById('title-screen').addEventListener('click', go);
+});
+</script>
+</body>
+</html>
